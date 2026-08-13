@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Hardened Android APK
 
 on:
   workflow_dispatch:
@@ -13,10 +13,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD_SECRET: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS_SECRET: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD_SECRET: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -25,13 +30,14 @@ jobs:
           java-version: '17'
 
       - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.9'
 
       - name: Ensure Android SDK 35
         shell: bash
         run: |
+          set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           if [ -z "$SDK_ROOT" ]; then
             echo "Android SDK environment is not available on the runner." >&2
@@ -44,15 +50,54 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;34.0.0"
 
-      - name: Build installable debug APK
+      - name: Prepare optional private signing key
+        shell: bash
         run: |
-          chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace
+          set -euo pipefail
+          if [ -n "${KEYSTORE_B64:-}" ] && [ -n "${KEYSTORE_PASSWORD_SECRET:-}" ] && [ -n "${KEY_ALIAS_SECRET:-}" ] && [ -n "${KEY_PASSWORD_SECRET:-}" ]; then
+            KEYSTORE_PATH="$RUNNER_TEMP/rootcatoggle-release.jks"
+            CERT_PATH="$RUNNER_TEMP/rootcatoggle-signer.der"
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
+            keytool -exportcert \
+              -keystore "$KEYSTORE_PATH" \
+              -storepass "$KEYSTORE_PASSWORD_SECRET" \
+              -alias "$KEY_ALIAS_SECRET" \
+              -file "$CERT_PATH" >/dev/null
+            SIGNER_SHA256="$(sha256sum "$CERT_PATH" | awk '{print toupper($1)}')"
 
-      - name: Upload APK
+            echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS_SECRET" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASSWORD_SECRET" >> "$GITHUB_ENV"
+            echo "EXPECTED_SIGNER_SHA256=$SIGNER_SHA256" >> "$GITHUB_ENV"
+            echo "BUILD_SIGNING_MODE=private-keystore+signature-enforcement" >> "$GITHUB_ENV"
+          else
+            echo "BUILD_SIGNING_MODE=ephemeral-debug-fallback" >> "$GITHUB_ENV"
+            echo "Signing secrets not configured; R8 hardening remains enabled, signature enforcement is disabled." >&2
+          fi
+
+      - name: Build R8-hardened release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean assembleRelease --stacktrace
+          echo "Signing mode: $BUILD_SIGNING_MODE"
+
+      - name: Verify generated APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -f "$APK"
+          APKSIGNER="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}/build-tools/34.0.0/apksigner"
+          "$APKSIGNER" verify --verbose "$APK"
+          sha256sum "$APK"
+
+      - name: Upload hardened APK only
         uses: actions/upload-artifact@v7
         with:
-          name: RootCAToggle-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: RootCAToggle-v0.2.1-hardened-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
