@@ -18,6 +18,7 @@ final class RootTrustStore {
     private final CertificateFactory factory;
 
     RootTrustStore(Context context, RootShell root) throws Exception {
+        AppIntegrity.enforce(context);
         this.context = context.getApplicationContext();
         this.root = root;
         this.factory = CertificateFactory.getInstance("X.509");

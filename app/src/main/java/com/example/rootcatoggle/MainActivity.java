@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     private BulkOperation bulk;
     private boolean rootGranted;
     private boolean busy;
+    private boolean integrityValid;
 
     private TextView rootStatus;
     private TextView summary;
@@ -62,10 +63,26 @@ public class MainActivity extends Activity {
     private Button disableVendor;
     private Button enableSelected;
     private Button disableSelected;
+    private Button selectTommyPreset;
+    private Button clearSelection;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        integrityValid = AppIntegrity.isValid(this);
         buildUi();
+        if (!integrityValid) {
+            rootStatus.setText("Integrity: INVALID SIGNATURE");
+            summary.setText("This APK was re-signed or repackaged. Root write controls are locked.");
+            requestRoot.setEnabled(false);
+            setWriteControls(false);
+            new AlertDialog.Builder(this)
+                    .setTitle("App integrity check failed")
+                    .setMessage("The installed APK signature does not match the signer embedded at build time. Use the original Tommy build.")
+                    .setCancelable(false)
+                    .setPositiveButton("Close", (d, w) -> finish())
+                    .show();
+            return;
+        }
         requestRootAndLoad();
     }
 
@@ -84,12 +101,28 @@ public class MainActivity extends Activity {
         header.setPadding(dp(16), dp(14), dp(16), dp(10));
         header.setBackgroundColor(Color.rgb(38, 50, 56));
 
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
         TextView title = new TextView(this);
         title.setText("Root CA Toggle");
         title.setTextColor(Color.WHITE);
         title.setTextSize(22);
         title.setTypeface(null, 1);
-        header.addView(title);
+        titleRow.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView watermark = new TextView(this);
+        watermark.setText("Tommy");
+        watermark.setTextColor(Color.rgb(176, 190, 197));
+        watermark.setTextSize(12);
+        watermark.setTypeface(null, 1);
+        watermark.setGravity(Gravity.END);
+        watermark.setAlpha(0.78f);
+        if (android.os.Build.VERSION.SDK_INT >= 21) watermark.setLetterSpacing(0.10f);
+        titleRow.addView(watermark, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        header.addView(titleRow);
 
         rootStatus = new TextView(this);
         rootStatus.setText("Root: checking...");
@@ -144,6 +177,13 @@ public class MainActivity extends Activity {
         vendorRow.addView(disableVendor, weight());
         controls.addView(vendorRow);
 
+        LinearLayout presetRow = horizontalRow();
+        selectTommyPreset = button("SELECT TOMMY PRESET", v -> selectTommyPreset());
+        clearSelection = button("CLEAR SELECTION", v -> clearSelection());
+        presetRow.addView(selectTommyPreset, weight());
+        presetRow.addView(clearSelection, weight());
+        controls.addView(presetRow);
+
         LinearLayout selectedRow = horizontalRow();
         enableSelected = button("ENABLE SELECTED", v -> performSelected(true));
         disableSelected = button("DISABLE SELECTED", v -> performSelected(false));
@@ -164,6 +204,7 @@ public class MainActivity extends Activity {
     }
 
     private void requestRootAndLoad() {
+        if (!integrityValid) return;
         setWriteControls(false);
         rootStatus.setText("Root: requesting/checking...");
         summary.setText("Reading Android system CA store...");
@@ -204,6 +245,8 @@ public class MainActivity extends Activity {
         disableVendor.setEnabled(enabled);
         enableSelected.setEnabled(enabled);
         disableSelected.setEnabled(enabled);
+        selectTommyPreset.setEnabled(enabled);
+        clearSelection.setEnabled(enabled);
     }
 
     private void rebuildVendorSpinner() {
@@ -251,6 +294,44 @@ public class MainActivity extends Activity {
             if (ca.selected) selected++;
         }
         summary.setText(enabled + " / " + all.size() + " system CAs enabled • " + selected + " selected • showing " + filtered.size());
+    }
+
+
+    private void selectTommyPreset() {
+        if (all.isEmpty()) {
+            Toast.makeText(this, "No system certificates loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        TommyPreset.Result result = TommyPreset.apply(all);
+        applyFilter();
+
+        StringBuilder message = new StringBuilder();
+        message.append("Selected ").append(result.selectedCount).append(" system CA(s).\n\n");
+        message.append("This only changes the selection. Nothing has been disabled yet. ")
+                .append("Review the checked entries, then press DISABLE SELECTED when ready.");
+
+        if (!result.unmatchedRules.isEmpty()) {
+            message.append("\n\nNot found on this ROM/image (no selection made for these rules):");
+            int limit = Math.min(12, result.unmatchedRules.size());
+            for (int i = 0; i < limit; i++) {
+                message.append("\n• ").append(result.unmatchedRules.get(i));
+            }
+            if (result.unmatchedRules.size() > limit) {
+                message.append("\n• … and ").append(result.unmatchedRules.size() - limit).append(" more");
+            }
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Tommy preset selected")
+                .setMessage(message.toString())
+                .setPositiveButton("Review selection", null)
+                .show();
+    }
+
+    private void clearSelection() {
+        for (TrustedCa ca : all) ca.selected = false;
+        applyFilter();
+        Toast.makeText(this, "Selection cleared", Toast.LENGTH_SHORT).show();
     }
 
     private void performSelected(boolean desiredEnabled) {

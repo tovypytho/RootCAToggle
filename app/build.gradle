@@ -2,6 +2,14 @@ plugins {
     id 'com.android.application'
 }
 
+def keystorePath = System.getenv('ANDROID_KEYSTORE_PATH') ?: ''
+def keystorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: ''
+def keyAliasValue = System.getenv('ANDROID_KEY_ALIAS') ?: ''
+def keyPasswordValue = System.getenv('ANDROID_KEY_PASSWORD') ?: ''
+def expectedSigner = (System.getenv('EXPECTED_SIGNER_SHA256') ?: '').replace(':', '').replace(' ', '').toUpperCase()
+def hasReleaseSigning = !keystorePath.isEmpty() && !keystorePassword.isEmpty() && !keyAliasValue.isEmpty() && !keyPasswordValue.isEmpty()
+def enforceSignature = hasReleaseSigning && !expectedSigner.isEmpty()
+
 android {
     namespace 'com.example.rootcatoggle'
     compileSdk 35
@@ -10,14 +18,47 @@ android {
         applicationId 'com.example.rootcatoggle'
         minSdk 24
         targetSdk 28
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 3
+        versionName '0.2.1'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        hardenedRelease {
+            if (hasReleaseSigning) {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
+                enableV1Signing true
+                enableV2Signing true
+            }
+        }
     }
 
     buildTypes {
-        release {
+        debug {
             minifyEnabled false
+            shrinkResources false
+            buildConfigField 'String', 'EXPECTED_SIGNER_SHA256', '""'
+            buildConfigField 'boolean', 'SIGNATURE_ENFORCEMENT', 'false'
+        }
+
+        release {
+            minifyEnabled true
+            shrinkResources true
+            debuggable false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // A configured secret keystore gives stable updates + signature pinning.
+            // Without secrets the build remains installable and R8-obfuscated, but uses
+            // the runner debug signer and therefore cannot enforce anti-repackaging.
+            signingConfig hasReleaseSigning ? signingConfigs.hardenedRelease : signingConfigs.debug
+            buildConfigField 'String', 'EXPECTED_SIGNER_SHA256', '"' + expectedSigner + '"'
+            buildConfigField 'boolean', 'SIGNATURE_ENFORCEMENT', enforceSignature ? 'true' : 'false'
         }
     }
 

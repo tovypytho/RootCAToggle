@@ -75,8 +75,12 @@ final class CertificateUtil {
         if (s.contains("entrust")) return "Entrust";
         if (s.contains("google trust")) return "Google Trust Services";
         if (s.contains("internet security research group") || s.contains("isrg") || s.contains("let's encrypt")) return "ISRG / Let's Encrypt";
-        if (s.contains("godaddy")) return "GoDaddy";
+        if (s.contains("godaddy") || s.contains("go daddy")) return "GoDaddy";
         if (s.contains("amazon")) return "Amazon";
+        if (s.contains("wisekey")) return "WISeKey";
+        if (s.contains("dhimyotis") || s.contains("certigna")) return "Dhimyotis / Certigna";
+        if (s.contains("disig")) return "Disig";
+        if (s.contains("baltimore cybertrust")) return "Baltimore";
         if (s.contains("microsoft")) return "Microsoft";
         if (s.contains("identrust")) return "IdenTrust";
         return "Other";
