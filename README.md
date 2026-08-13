@@ -1,8 +1,12 @@
-# Root CA Toggle v0.2.1 — Tommy hardened build
+# Root CA Toggle v0.2.2 — Tommy hardened build
 
 Minimal root-only Android 7 system trusted-CA toggle manager for rooted VPhoneGaGa/VPhoneOS-style environments.
 
-## v0.2.1 changes
+## v0.2.2 changes
+* Fixes GitHub Actions builds affected by Maven Central HTTP 403 on shared runner egress by preferring Google's documented Maven Central mirror.
+* Adds a CI mirror preflight check with bounded retries and a clear failure point.
+* Uses Gradle Actions v6 with the open-source `basic` cache provider.
+* Keeps every v0.2.1 Tommy preset, watermark, trust-store toggle, rollback, R8 hardening and optional signature enforcement feature unchanged.
 
 - Adds a small **Tommy** watermark in the top-right of the app header.
 - Adds **SELECT TOMMY PRESET**: selection-only bulk preset for the requested CA list. It never disables certificates by itself.
@@ -74,7 +78,7 @@ Push this complete project to GitHub, including `.github/workflows/build-apk.yml
 The workflow produces:
 
 ```text
-RootCAToggle-v0.2.1-hardened-apk
+RootCAToggle-v0.2.2-hardened-apk
 └── app-release.apk
 ```
 
@@ -173,3 +177,9 @@ For GitHub Actions you do not need to calculate `EXPECTED_SIGNER_SHA256`; the wo
 ## First test
 
 Do not begin with `Disable All` on a new ROM/build. First grant root, toggle one non-critical CA OFF, reopen the app to verify persistence, toggle it ON again, then test vendor/global bulk operations.
+
+## GitHub Actions Maven Central 403 note
+
+If a hosted runner receives HTTP 403 from `repo.maven.apache.org`, that happens before application compilation and is not an Android source/R8 error. This project prefers Google's documented Maven Central mirror in `settings.gradle`, with the normal Maven Central endpoint retained only as a final fallback for conventional local development.
+
+The workflow also checks one known AGP transitive dependency from the mirror before invoking Gradle. If that preflight passes but the build later fails, inspect the first `* What went wrong:` block rather than the repeated stack-trace tail.

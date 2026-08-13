@@ -1,8 +1,27 @@
 pluginManagement {
     repositories {
+        // Android Gradle Plugin and Android tooling.
         google()
-        mavenCentral()
+
+        // GitHub-hosted runners can occasionally receive Maven Central 403s from
+        // shared egress addresses. Google documents this as a Maven Central mirror.
+        // Keep it ahead of the public Central endpoint so normal dependency
+        // resolution does not depend on the runner's Maven Central egress status.
+        maven {
+            name = "GoogleHostedMavenCentralMirror"
+            url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+        }
+
+        // Needed for plugin marker artifacts that are published only to the Gradle
+        // Plugin Portal. Maven Central dependencies are already satisfied by the
+        // mirror above when available.
         gradlePluginPortal()
+
+        // Preserve conventional Maven Central fallback on developer machines,
+        // but do not hit the blocked shared GitHub Actions egress endpoint directly.
+        if (System.getenv("GITHUB_ACTIONS") != "true") {
+            mavenCentral()
+        }
     }
 }
 
@@ -10,7 +29,13 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
-        mavenCentral()
+        maven {
+            name = "GoogleHostedMavenCentralMirror"
+            url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+        }
+        if (System.getenv("GITHUB_ACTIONS") != "true") {
+            mavenCentral()
+        }
     }
 }
 
