@@ -33,6 +33,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.9'
+          # Open-source GitHub Actions cache provider. This keeps Gradle dependencies
+          # cached between runs while avoiding the proprietary enhanced provider.
+          cache-provider: basic
 
       - name: Ensure Android SDK 35
         shell: bash
@@ -49,6 +52,18 @@ jobs:
           fi
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;34.0.0"
+
+      - name: Check Maven Central mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST_URL="https://maven-central.storage-download.googleapis.com/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.20/kotlin-stdlib-jdk8-1.9.20.pom"
+          echo "Checking Google-hosted Maven Central mirror..."
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 15 --max-time 60 \
+            -o /dev/null "$TEST_URL"
+          echo "Dependency mirror reachable."
 
       - name: Prepare optional private signing key
         shell: bash
@@ -81,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew clean assembleRelease --stacktrace
+          ./gradlew clean assembleRelease --stacktrace --no-daemon
           echo "Signing mode: $BUILD_SIGNING_MODE"
 
       - name: Verify generated APK
@@ -97,7 +112,7 @@ jobs:
       - name: Upload hardened APK only
         uses: actions/upload-artifact@v7
         with:
-          name: RootCAToggle-v0.2.1-hardened-apk
+          name: RootCAToggle-v0.2.2-hardened-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
