@@ -112,7 +112,7 @@ jobs:
       - name: Upload hardened APK only
         uses: actions/upload-artifact@v7
         with:
-          name: RootCAToggle-v0.2.2-hardened-apk
+          name: RootCAToggle-v0.2.3-hardened-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
