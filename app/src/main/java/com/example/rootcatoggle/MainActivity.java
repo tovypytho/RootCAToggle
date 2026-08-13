@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private RootTrustStore store;
     private CertificateRepository repository;
     private BulkOperation bulk;
+    private SelectionConfigStore selectionConfig;
     private boolean rootGranted;
     private boolean busy;
     private boolean integrityValid;
@@ -65,10 +66,13 @@ public class MainActivity extends Activity {
     private Button disableSelected;
     private Button selectTommyPreset;
     private Button clearSelection;
+    private Button saveSelection;
+    private Button loadSavedSelection;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         integrityValid = AppIntegrity.isValid(this);
+        selectionConfig = new SelectionConfigStore(this);
         buildUi();
         if (!integrityValid) {
             rootStatus.setText("Integrity: INVALID SIGNATURE");
@@ -184,6 +188,13 @@ public class MainActivity extends Activity {
         presetRow.addView(clearSelection, weight());
         controls.addView(presetRow);
 
+        LinearLayout savedRow = horizontalRow();
+        saveSelection = button("SAVE SELECTION", v -> saveSelectionConfig());
+        loadSavedSelection = button("LOAD SAVED", v -> loadSavedSelectionConfig(true));
+        savedRow.addView(saveSelection, weight());
+        savedRow.addView(loadSavedSelection, weight());
+        controls.addView(savedRow);
+
         LinearLayout selectedRow = horizontalRow();
         enableSelected = button("ENABLE SELECTED", v -> performSelected(true));
         disableSelected = button("DISABLE SELECTED", v -> performSelected(false));
@@ -217,6 +228,16 @@ public class MainActivity extends Activity {
                 repository = new CertificateRepository(store);
                 bulk = new BulkOperation(store);
                 List<TrustedCa> loaded = repository.loadSystemCertificates();
+                SelectionConfigStore.LoadResult savedResult;
+                String savedError = null;
+                try {
+                    savedResult = selectionConfig.applyTo(loaded);
+                } catch (Exception configError) {
+                    savedResult = new SelectionConfigStore.LoadResult(false, 0, 0, 0);
+                    savedError = configError.getMessage();
+                }
+                final SelectionConfigStore.LoadResult restored = savedResult;
+                final String restoreError = savedError;
                 main.post(() -> {
                     rootGranted = true;
                     rootStatus.setText("Root: GRANTED • Android " + android.os.Build.VERSION.RELEASE);
@@ -225,7 +246,12 @@ public class MainActivity extends Activity {
                     rebuildVendorSpinner();
                     applyFilter();
                     setWriteControls(true);
-                    Toast.makeText(this, "Loaded " + all.size() + " system CAs", Toast.LENGTH_SHORT).show();
+                    String toast = "Loaded " + all.size() + " system CAs";
+                    if (restored.exists) toast += " • restored " + restored.matchedCount + " saved selection(s)";
+                    Toast.makeText(this, toast, Toast.LENGTH_SHORT).show();
+                    if (restoreError != null) {
+                        Toast.makeText(this, "Saved selection could not be loaded: " + restoreError, Toast.LENGTH_SHORT).show();
+                    }
                 });
             } catch (Exception e) {
                 main.post(() -> {
@@ -247,6 +273,8 @@ public class MainActivity extends Activity {
         disableSelected.setEnabled(enabled);
         selectTommyPreset.setEnabled(enabled);
         clearSelection.setEnabled(enabled);
+        saveSelection.setEnabled(enabled);
+        loadSavedSelection.setEnabled(enabled);
     }
 
     private void rebuildVendorSpinner() {
@@ -332,6 +360,60 @@ public class MainActivity extends Activity {
         for (TrustedCa ca : all) ca.selected = false;
         applyFilter();
         Toast.makeText(this, "Selection cleared", Toast.LENGTH_SHORT).show();
+    }
+
+    private void saveSelectionConfig() {
+        if (all.isEmpty()) {
+            Toast.makeText(this, "No system certificates loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            int count = selectionConfig.save(all);
+            new AlertDialog.Builder(this)
+                    .setTitle("Selection saved")
+                    .setMessage("Saved " + count + " selected CA(s).\n\nConfig file:\n" + selectionConfig.path() +
+                            "\n\nThis file is read automatically every time the CA list is loaded. Closing or restarting the app will restore these checkboxes. Trust ON/OFF state is not stored in this file.")
+                    .setPositiveButton("OK", null)
+                    .show();
+        } catch (Exception e) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Save failed")
+                    .setMessage(e.getMessage())
+                    .setPositiveButton("OK", null)
+                    .show();
+        }
+    }
+
+    private void loadSavedSelectionConfig(boolean showDialog) {
+        if (all.isEmpty()) {
+            Toast.makeText(this, "No system certificates loaded", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            SelectionConfigStore.LoadResult result = selectionConfig.applyTo(all);
+            if (!result.exists) {
+                Toast.makeText(this, "No saved selection config yet", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            applyFilter();
+            if (showDialog) {
+                String message = "Restored " + result.matchedCount + " selected CA(s) from:\n" + selectionConfig.path();
+                if (result.missingCount > 0) {
+                    message += "\n\n" + result.missingCount + " saved fingerprint(s) were not found on this ROM.";
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Saved selection loaded")
+                        .setMessage(message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            }
+        } catch (Exception e) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Load failed")
+                    .setMessage(e.getMessage())
+                    .setPositiveButton("OK", null)
+                    .show();
+        }
     }
 
     private void performSelected(boolean desiredEnabled) {

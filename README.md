@@ -1,32 +1,52 @@
-# RootCAToggle v0.2.3
+# RootCAToggle v0.2.4
 
-> **GitHub Web Upload Friendly package:** this source archive intentionally does **not** contain `.github/`. Upload/replace the project files through GitHub Web, then edit `.github/workflows/build-apk.yml` separately using the companion `build-apk-v0.2.3.yml` file supplied with this release.
+> **GitHub Web Upload Friendly package:** this source archive intentionally does **not** contain `.github/`. Upload/replace the project files through GitHub Web, then edit `.github/workflows/build-apk.yml` separately using the companion `build-apk-v0.2.4.yml` file supplied with this release.
 
-## v0.2.3 CI fix
-
-The previous release build reached Java compilation, R8 minification, resource shrinking, and APK packaging, then failed only because Android Lint treated `targetSdk 28` as the fatal `ExpiredTargetSdkVersion` Google Play policy check. This project is a direct-sideload Android 7/VPhoneGaGa utility, so v0.2.3 keeps `targetSdk 28` and suppresses **only** `ExpiredTargetSdkVersion`; all other fatal release lint checks remain enabled.
-
-# Root CA Toggle v0.2.3 — Tommy hardened build
+# Root CA Toggle v0.2.4 — Tommy hardened build
 
 Minimal root-only Android 7 system trusted-CA toggle manager for rooted VPhoneGaGa/VPhoneOS-style environments.
 
-## v0.2.3 changes
-* Fixes GitHub Actions builds affected by Maven Central HTTP 403 on shared runner egress by preferring Google's documented Maven Central mirror.
-* Adds a CI mirror preflight check with bounded retries and a clear failure point.
-* Uses Gradle Actions v6 with the open-source `basic` cache provider.
-* Keeps every v0.2.3 Tommy preset, watermark, trust-store toggle, rollback, R8 hardening and optional signature enforcement feature unchanged.
+## v0.2.4 changes
 
-- Adds a small **Tommy** watermark in the top-right of the app header.
-- Adds **SELECT TOMMY PRESET**: selection-only bulk preset for the requested CA list. It never disables certificates by itself.
-- Adds **CLEAR SELECTION** to reset all checkboxes quickly.
-- Preset application clears the previous selection, selects matching CAs, and reports entries/rules that are absent on the current ROM.
-- Keeps all v0.1 functionality: individual toggle, multi-select, vendor bulk, Enable All, Disable All, rollback, and trust-store broadcast.
-- Release builds now use **R8 minification/optimization/obfuscation** and resource shrinking.
-- Application implementation classes are repackaged/renamed by R8; source-file metadata is reduced.
-- Optional **anti-repackaging signature enforcement** is enabled automatically when a private signing keystore is supplied to GitHub Actions.
-- CI uploads only the APK, not the R8 `mapping.txt` file.
+- Adds **SAVE SELECTION**. The currently checked system CAs are stored as a manual selection profile.
+- Adds **LOAD SAVED** for manually re-applying the saved checkbox profile without restarting the app.
+- The saved profile is **automatically loaded every time the system CA list is loaded**, including normal app startup after root is granted.
+- Closing, force-stopping, or rebooting the Android VM does not remove the saved checkbox profile.
+- The profile is matched by **SHA-256 certificate fingerprint**, not CA filename, so it is robust against filename/hash differences on compatible images.
+- The profile is a small human-readable file named `selection_config.txt` under the app's internal files directory. The app displays the exact absolute path after saving. Typical Android 7 paths are `/data/user/0/com.example.rootcatoggle/files/selection_config.txt` or its `/data/data/com.example.rootcatoggle/files/selection_config.txt` compatibility path.
+- Saving a profile stores **selection only**. It never changes CA Enabled/Disabled trust state.
+- To intentionally replace the saved profile with an empty profile: press **CLEAR SELECTION**, then **SAVE SELECTION**.
+- Keeps the Tommy preset, watermark, individual/vendor/global CA toggles, rollback, R8 hardening, Maven mirror CI fix, targetSdk-28 lint exception, and optional signature enforcement from v0.2.3.
 
-No Android APK can be made literally impossible to decompile or patch. These measures are defense-in-depth intended to make casual decompilation/repackaging substantially harder. If the source repository is public, anyone can still read the original source regardless of APK obfuscation, so use a **private repository** for meaningful source protection.
+## Saved selection behavior
+
+Example flow:
+
+```text
+SELECT TOMMY PRESET
+        ↓
+manually add/remove checkmarks if desired
+        ↓
+SAVE SELECTION
+        ↓
+selection_config.txt is saved transactionally
+        ↓
+close / force-stop / reboot
+        ↓
+open RootCAToggle + grant root
+        ↓
+saved fingerprint list is loaded automatically
+        ↓
+matching CA checkboxes are selected again
+```
+
+`selection_config.txt` contains comments plus one SHA-256 certificate fingerprint per selected CA. The CA common name is written as a comment for readability, but restore matching uses only the SHA-256 fingerprint. If a saved fingerprint is absent from the current ROM, the app skips it rather than selecting a different CA.
+
+The saved file belongs to app-private storage. It survives closing/restarting the app and normal VM reboots, but Android will remove it if the app is uninstalled or its app data is cleared.
+
+## v0.2.3 build fixes retained
+
+The project keeps `targetSdk 28` for the intended direct-sideload Android 7 environment while suppressing only Android Lint's `ExpiredTargetSdkVersion` rule. Other fatal release lint checks remain enabled. GitHub Actions also prefers the Google-hosted Maven Central mirror used to work around the hosted-runner Maven Central HTTP 403 observed in earlier builds.
 
 ## What it does
 
@@ -79,14 +99,14 @@ The trust-store change is system-wide for apps that use Android's system CA trus
 
 ## GitHub Actions — immediate hardened build
 
-Push this complete project to GitHub, including `.github/workflows/build-apk.yml`, then open:
+This web-upload package intentionally omits `.github`. Upload/replace the source files first. Then open the existing `.github/workflows/build-apk.yml` in GitHub's web editor and replace its contents with the separately supplied `build-apk-v0.2.4.yml`. After committing both changes, open:
 
 **Actions → Build Hardened Android APK → Run workflow**
 
 The workflow produces:
 
 ```text
-RootCAToggle-v0.2.3-hardened-apk
+RootCAToggle-v0.2.4-hardened-apk
 └── app-release.apk
 ```
 
