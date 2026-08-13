@@ -1,12 +1,20 @@
-# Root CA Toggle v0.2.2 — Tommy hardened build
+# RootCAToggle v0.2.3
+
+> **GitHub Web Upload Friendly package:** this source archive intentionally does **not** contain `.github/`. Upload/replace the project files through GitHub Web, then edit `.github/workflows/build-apk.yml` separately using the companion `build-apk-v0.2.3.yml` file supplied with this release.
+
+## v0.2.3 CI fix
+
+The previous release build reached Java compilation, R8 minification, resource shrinking, and APK packaging, then failed only because Android Lint treated `targetSdk 28` as the fatal `ExpiredTargetSdkVersion` Google Play policy check. This project is a direct-sideload Android 7/VPhoneGaGa utility, so v0.2.3 keeps `targetSdk 28` and suppresses **only** `ExpiredTargetSdkVersion`; all other fatal release lint checks remain enabled.
+
+# Root CA Toggle v0.2.3 — Tommy hardened build
 
 Minimal root-only Android 7 system trusted-CA toggle manager for rooted VPhoneGaGa/VPhoneOS-style environments.
 
-## v0.2.2 changes
+## v0.2.3 changes
 * Fixes GitHub Actions builds affected by Maven Central HTTP 403 on shared runner egress by preferring Google's documented Maven Central mirror.
 * Adds a CI mirror preflight check with bounded retries and a clear failure point.
 * Uses Gradle Actions v6 with the open-source `basic` cache provider.
-* Keeps every v0.2.1 Tommy preset, watermark, trust-store toggle, rollback, R8 hardening and optional signature enforcement feature unchanged.
+* Keeps every v0.2.3 Tommy preset, watermark, trust-store toggle, rollback, R8 hardening and optional signature enforcement feature unchanged.
 
 - Adds a small **Tommy** watermark in the top-right of the app header.
 - Adds **SELECT TOMMY PRESET**: selection-only bulk preset for the requested CA list. It never disables certificates by itself.
@@ -78,7 +86,7 @@ Push this complete project to GitHub, including `.github/workflows/build-apk.yml
 The workflow produces:
 
 ```text
-RootCAToggle-v0.2.2-hardened-apk
+RootCAToggle-v0.2.3-hardened-apk
 └── app-release.apk
 ```
 

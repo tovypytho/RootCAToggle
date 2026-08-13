@@ -18,8 +18,8 @@ android {
         applicationId 'com.example.rootcatoggle'
         minSdk 24
         targetSdk 28
-        versionCode 4
-        versionName '0.2.2'
+        versionCode 5
+        versionName '0.2.3'
     }
 
     buildFeatures {
@@ -60,6 +60,16 @@ android {
             buildConfigField 'String', 'EXPECTED_SIGNER_SHA256', '"' + expectedSigner + '"'
             buildConfigField 'boolean', 'SIGNATURE_ENFORCEMENT', enforceSignature ? 'true' : 'false'
         }
+    }
+
+    // This app is distributed by direct sideload for Android 7/VPhoneGaGa,
+    // not through Google Play. Keep targetSdk 28 for the intended legacy runtime
+    // behavior, while suppressing only the Play-target-age lint rule. Other fatal
+    // release lint checks remain enabled.
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+        disable 'ExpiredTargetSdkVersion'
     }
 
     compileOptions {
